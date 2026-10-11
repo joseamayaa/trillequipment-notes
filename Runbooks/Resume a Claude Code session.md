@@ -10,7 +10,7 @@ updated: 2026-10-08
 Sessions save automatically per project folder. Hub: [[Trill Equipment]]
 
 ## Resume
-From `C:\GitHub Repos\trillequipment`:
+From the project folder in WSL (`/home/joh/GitHub/trillequipment`):
 | Command | Use when |
 |---|---|
 | `claude --continue` | Pick up the most recent session |

@@ -11,7 +11,7 @@ Run the Supabase backend on my machine for testing. Hub: [[Trill Equipment]]
 
 ## Before you start
 - Docker Desktop must be running (open it from the Start menu, wait for "Engine running").
-- Run every command from the repo folder: `C:\GitHub Repos\trillequipment`
+- Run every command from the project folder in WSL: `/home/joh/GitHub/trillequipment`
 - No install needed: `npx supabase ...` downloads the CLI automatically.
 
 ## Start

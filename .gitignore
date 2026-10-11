@@ -7,3 +7,6 @@
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Passwords and secrets: never commit
+trillpw.txt

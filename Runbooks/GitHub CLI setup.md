@@ -15,7 +15,7 @@ winget install --id GitHub.cli -e
 ```
 Restart the terminal / Claude Code afterwards so `gh` is found.
 
-## Sign in (done 2026/10/81. Y)
+## Sign in
 ```
 gh auth login
 ```

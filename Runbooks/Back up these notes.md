@@ -28,7 +28,7 @@ git restore --source=<commit> -- "path/to/Note.md"
 
 ## Good to know
 - `.obsidian/workspace.json` (window layout) is not backed up on purpose; it changes every time Obsidian opens.
-- The folder above this vault (`C:\XidoProjects\trillequipment`) is an older copy of the team repo. It's set to ignore this vault, so `git add .` there won't pick up the notes.
+- The real project (site + Supabase) lives in WSL at `/home/joh/GitHub/trillequipment`. This vault is a separate repo on the Windows side; the older Windows copy of the project is no longer used.
 - Never put tokens or passwords in notes.
 
 Related: [[Git branch workflow]]
