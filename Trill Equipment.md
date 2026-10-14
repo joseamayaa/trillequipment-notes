@@ -2,7 +2,7 @@
 type: hub
 project: trillequipment
 tags: [hub]
-updated: 2026-10-11
+updated: 2026-10-14
 ---
 
 # Trill Equipment
@@ -25,6 +25,8 @@ Details: [[2026-10-11 Docker Hub test pipeline]]
 ## Runbooks
 - [[Build and push a test image]]
 - [[Update the Hetzner test server]]
+- [[Self-host Supabase on Hetzner]]
+- [[Apply the schema to self-hosted Supabase]]
 - [[Supabase local dev]]
 - [[Supabase token setup]]
 - [[Git branch workflow]]
@@ -39,9 +41,15 @@ Details: [[2026-10-11 Docker Hub test pipeline]]
 ## Logs
 - [[2026-10-07 Supabase backend setup]]
 - [[2026-10-11 Docker Hub and Hetzner setup]]
+- [[2026-10-14 Self-hosting Supabase on Hetzner]]
 
 ## Status and next steps
 - [x] Site image built and pushed (`test-1`), running on Hetzner
+- [x] Supabase self-hosted on Hetzner (port 8000), Studio login works
+- [ ] Check the firewall: only 22/80/8000 open (pooler publishes 5432/6543)
+- [ ] Apply the project's SQL schema to the server, RLS on every table
+- [ ] Connect the static site (`config.js` + `supabase-js`), build `test-2`, redeploy
+- [ ] **Next session: Caddy + HTTPS** (needs a domain; see the 2026-10-14 log for the plan)
 - [ ] Set the Docker Hub repo to private; add collaborators / server login (access token)
 - [ ] Buy a domain, add a DNS A record to the Hetzner server
 - [ ] Add HTTPS with Caddy in the compose file
