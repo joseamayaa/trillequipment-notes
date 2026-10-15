@@ -56,7 +56,20 @@ Change the tag in the file back to the old one and run `docker compose up -d`.
 - `failed to resolve reference ... not found` → the tag doesn't exist on Docker Hub (it happened with `test-1` before it was pushed). Push it.
 - Container not running → `docker ps -a`, then `docker logs <name>`.
 
-## Not done yet
-Domain + HTTPS (Caddy in front of the site container). See the next steps in [[Trill Equipment]].
+## Update 2026-10-15: now behind Caddy
+The site no longer publishes port 80 (Caddy owns 80/443) and is reached at `https://trill.xidolabs.cc` through the `web` Docker network (alias `site`). The compose file above is the old one. When it is recreated, it must also join `web` or Caddy cannot reach it:
+```yaml
+services:
+  site:
+    image: jjohamaya/trillequipment:test-N
+    restart: unless-stopped
+    networks:
+      web:
+        aliases: [site]
+networks:
+  web:
+    external: true
+```
+The tag update steps (edit the tag, `pull`, `up -d`) are the same. See [[Caddy reverse proxy on Hetzner]] and [[Hetzner server layout]].
 
 Related: [[2026-10-11 Docker Hub test pipeline]]

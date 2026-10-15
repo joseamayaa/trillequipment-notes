@@ -30,6 +30,9 @@ Hub: [[Trill Equipment]] · Worked with Claude Code
 - [ ] **Next session: Caddy + HTTPS.** Needs a domain (two A records, e.g. `app.` and `api.`). Plan: Caddy on 80/443 in front of `site` and `supabase-envoy`, shared Docker network, `site` stops publishing port 80, close 8000 afterward; then update `config.js` and the Supabase URLs to `https://`
 - [ ] Back up the stack's `.env` values in a password manager (never in this vault)
 
+## Continued
+Caddy, HTTPS and the nginx cutover happened next: [[2026-10-15 Caddy cutover and server platform]].
+
 ## Notes
 - The anon key is public by design; `SERVICE_ROLE_KEY`, `JWT_SECRET` and `POSTGRES_PASSWORD` must never be pasted anywhere or put in the site.
 - A static site can't read runtime env vars; changing the Supabase URL means rebuilding and pushing a new image tag.
