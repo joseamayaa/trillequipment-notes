@@ -2,48 +2,69 @@
 type: reference
 project: trillequipment
 tags: [hetzner, docker, caddy, layout]
-updated: 2026-10-15
+updated: 2026-10-18
 ---
 
 # Hetzner server layout
 
-What lives where on the Hetzner server, as of 2026-10-15. The server is kept as a general multi-project host (Docker + Caddy). Hub: [[Trill Equipment]]
+What lives where on the Hetzner server, as of 2026-10-18. The server is kept as a general multi-project host (Docker + Caddy + a shared Supabase). Hub: [[Trill Equipment]]
 
 ## Folders
 ```
 /opt/x2g-infrastructure/
 ├── caddy/             Caddyfile, docker-compose.yaml, logs/   (active)
-├── backups/           builder/, n8n/  (see [[Back up n8n and builder]])
-├── migrations/        empty, for SQL files
-├── supabase/          empty; the running stack is still in its original folder
-└── trillequipment/   test project (contents not recorded)
+├── n8n/               docker-compose.yml (name: n8n), .env (hidden), backups/   (moved here 2026-10-18)
+├── backups/           builder/, n8n/, supabase/ (manual); daily/ + backup.sh (see [[Daily server backups]])
+├── migrations/        project SQL files (merged from ~/migrations)
+├── supabase/docker/   the running Supabase stack: docker-compose.yml, .env, volumes/ (moved here 2026-10-15)
+└── trillequipment/    test site docker-compose.yaml (site on the `web` network only)
 
 Outside that tree:
-/opt/n8n/                    n8n compose project (+ /opt/n8n/backups, n8n's own)
 /opt/website-builder/projects   generated sites; n8n writes here; mode 777
 /var/www/website-builder/form   builder pages (index.html, refine.html)
-~/trillequipment                the test site's docker-compose.yaml (original location)
+/opt/n8n.old-delete-me          old n8n folder, once renamed (see cleanup); /opt/n8n is the old location
 ```
-Deciding whether to move `/opt/n8n`, `/opt/website-builder`, `/var/www/website-builder` and the Supabase folder into `/opt/x2g-infrastructure/` is still open.
+Moving `/opt/website-builder` and `/var/www/website-builder` into `/opt/x2g-infrastructure/` is still open. `.env` files are hidden: use `ls -la`.
+
+## Cleanup reminder (on or after 2026-10-22)
+Old copies were left so nothing could be lost in the moves. Delete them once everything has run fine for a few days:
+- [ ] `~/migrations` (renamed `~/migrations.old-delete-me`): first re-check `diff -rq` against `/opt/x2g-infrastructure/migrations`
+- [ ] `~/supabase` (renamed `~/supabase.old-delete-me`): a 3.3 GB clone of the upstream Supabase repo; its `docker/` folder was moved out, git shows only those files as deleted. Check `git -C ... status --short | grep -v '^ D docker/'` is empty first
+- [ ] `/opt/n8n`: rename with `mv /opt/n8n /opt/n8n.old-delete-me` after n8n has been confirmed working from the new folder, then delete it here
+- [ ] In `/opt/x2g-infrastructure/supabase/docker`: `.env.bak-2026-10-17` (holds every secret) and `docker-compose.yml.bak-2026-10-17`
+- Remove with `rm -rf` only after reading the path; `df -h /` shows the space reclaimed.
+
+Moving a compose folder keeps the project name only if the folder name (or the compose `name:`) stays the same. The Supabase and n8n compose files set `name:` (`supabase`, `n8n`), so their volumes and networks kept their names and Caddy kept working. Without a pinned name the volumes would be recreated empty.
 
 ## Containers
-- **caddy**: ports 80/443, networks `web` + `supabase_default`.
-- **n8n** (`n8nio/n8n`, bound to `127.0.0.1:5678`) + **n8n-postgres**; volumes `n8n_n8n_data`, `n8n_postgres_data`; also mounts `/opt/website-builder` and `/opt/n8n/backups`.
-- **trillequipment-site-1** (`jjohamaya/trillequipment:test-1`), no published port, network alias `site` on `web`.
-- **Supabase stack** (`supabase-*`, gateway is **Envoy**: `supabase-envoy`/`api-gw`).
+- **caddy**: ports 80/443, networks `web` + `supabase_default` (both declared external in its compose file).
+- **n8n** (`n8nio/n8n`, bound to `127.0.0.1:5678`) + **n8n-postgres**, from `/opt/x2g-infrastructure/n8n`; volumes `n8n_n8n_data`, `n8n_postgres_data`; networks `n8n_n8n-network` + `web`; mounts `./backups` and `/opt/website-builder`. n8n is configured with `DB_TYPE=sqlite`, so `n8n-postgres` looks unused (to confirm); the real data is in `n8n_n8n_data`.
+- **trillequipment-site-1** (`jjohamaya/trillequipment:test-1`), no published port, network alias `site` on `web` (declared in its compose file).
+- **Supabase stack** (`supabase-*`, gateway is **Envoy**: `supabase-envoy`/`api-gw`), run from `/opt/x2g-infrastructure/supabase/docker`. Studio is at `https://trill-api.xidolabs.cc/` behind Envoy's Basic-auth login (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` in that `.env`). Never proxy straight to `supabase-studio:3000`: Studio has no login of its own. Calls to `/auth/v1/*` need the `apikey` header (401 without it).
+- Idle but kept: `supabase-edge-functions`, `supabase-imgproxy`, `supabase-storage`, `realtime-dev.supabase-realtime`, `supabase-pooler`. Optional; can be stopped with `docker compose stop <service>` to save memory.
 
 ## Networks
-- `web` (created 2026-10-14): caddy, n8n, trillequipment-site-1. `n8n` and the site were attached with `docker network connect`; make it permanent in their compose files.
+- `web`: caddy, n8n, trillequipment-site-1. Declared `external: true` in each compose file, so it survives a recreate.
 - `supabase_default`: Supabase stack + caddy.
+- `n8n_n8n-network`: n8n and n8n-postgres only.
 
 ## Ports
 | Port | What | Public? |
 |---|---|---|
 | 22 | SSH | yes |
 | 80 / 443 | Caddy | yes |
-| 8000 | Supabase gateway (Envoy), plain HTTP | **still open; close it** |
-| 5432 / 6543 | `supabase-pooler` publishes on 0.0.0.0 | **verify the firewall blocks them** |
-| 5678 | n8n | localhost only |
+| 8000 | Supabase gateway (Envoy); published as `127.0.0.1:8000` since 2026-10-18 (line 91 of its `docker-compose.yml`) | no; firewall rules deleted |
+| 5432 / 6543 | `supabase-pooler`, bound to `127.0.0.1` | no. DB access from the PC goes through an SSH tunnel |
+| 5678 | n8n, bound to `127.0.0.1` | no; firewall rules deleted |
+
+Docker publishes ports through its own iptables rules, which **bypass UFW**: `ufw status` does not show what is exposed. Check what is bound (`sudo ss -tlnp`) and test from outside. Only the Hetzner Cloud Firewall filters before Docker. From the PC on 2026-10-18: 22, 80, 443 answered; 5432, 6543, 5678, 8000, 3000 did not. Test:
+```powershell
+foreach ($p in 22,80,443,5432,6543,8000,5678,3000) {
+  $r = Test-NetConnection <server-ip> -Port $p -WarningAction SilentlyContinue
+  "{0}: {1}" -f $p, $r.TcpTestSucceeded
+}
+```
+Firewall rules now: SSH 22, HTTP 80, HTTPS 443 in both the Hetzner Cloud Firewall and UFW (default deny incoming). The 5678 and 8000 rules were deleted from both (confirmed 2026-10-18).
 
 ## DNS (Cloudflare, zone `xidolabs.cc`)
 - Wildcard `*.xidolabs.cc` → server, **proxied**; explicit `n8n` and `builder` records.
@@ -51,7 +72,6 @@ Deciding whether to move `/opt/n8n`, `/opt/website-builder`, `/var/www/website-b
 - Hostnames in use: `n8n.`, `builder.`, `trill.`, `trill-api.`
 
 ## host nginx
-Stopped on 2026-10-14/15 (not removed). Its configs are in `/etc/nginx/sites-available/`, and certbot certificates in `/etc/letsencrypt/`. It was the first thing on 80/443 and served `builder` and `n8n`.
-**Check `systemctl is-enabled nginx`.** If enabled, a reboot starts nginx first and Caddy then cannot bind 80/443.
+Stopped on 2026-10-14/15 and **disabled** (`systemctl is-enabled nginx` → `disabled`, confirmed 2026-10-18), so a reboot cannot grab 80/443 before Caddy. Not removed: its configs are in `/etc/nginx/sites-available/`, and certbot certificates in `/etc/letsencrypt/`. Rollback: `docker compose stop caddy && sudo systemctl start nginx`. Disabling certbot's renewal timer is still open.
 
-Related: [[Caddy reverse proxy on Hetzner]], [[Self-host Supabase on Hetzner]], [[2026-10-15 Caddy cutover and server platform]]
+Related: [[Caddy reverse proxy on Hetzner]], [[Self-host Supabase on Hetzner]], [[Daily server backups]], [[2026-10-15 Caddy cutover and server platform]], [[2026-10-18 n8n move, firewall and Supabase over HTTPS]]

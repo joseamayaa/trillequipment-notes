@@ -55,15 +55,17 @@ Rollback: `docker compose stop caddy && sudo systemctl start nginx` (nginx's con
 
 ## Check it worked
 - `curl -I https://n8n.xidolabs.cc`, `https://trill.xidolabs.cc`, `https://builder.xidolabs.cc`
-- `curl -i https://trill-api.xidolabs.cc/auth/v1/health -H "apikey: <ANON_KEY>"` returns 200
+- `curl -i https://trill-api.xidolabs.cc/auth/v1/health -H "apikey: <ANON_KEY>"` returns 200 (without the `apikey` header it is 401, which is normal)
 - n8n in the browser: run a workflow and watch execution progress update live.
 
 ## Troubleshooting
 - `failed to bind host port 0.0.0.0:80 ... address already in use` → something else holds 80/443 (here it was host nginx; `sudo ss -tlnp | grep ":80 "` shows who).
 - `networks must be a mapping` → bad indentation or a dash in the top-level `networks:`; run `docker compose config --quiet`.
 - Cloudflare `526` or a certificate that is slow to arrive → check `caddy.log`; if issuance keeps failing, set that record to DNS-only (grey) briefly, let Caddy issue, then switch the proxy back on.
+- A hostname shows the wrong (old) site in the browser while `curl` shows the right answer → stale browser cache. Check `curl -sI https://<host>/` (e.g. `trill-api` should return `401` with `www-authenticate: Basic`, which is Studio's login), then clear the cache or use a private window.
+- New hostnames get scanned within hours; check `logs/access.log` for odd user agents. Studio sits behind Envoy's Basic auth, so keep `DASHBOARD_PASSWORD` long and random.
 - `Caddyfile` must be a **file**; if it is missing when Compose starts, Docker creates an empty directory of that name.
-- `trillequipment-site-1` and `n8n` were attached to `web` with `docker network connect`, which is **lost when either container is recreated**. Add `web` to their own compose files (see [[Hetzner server layout]]).
+- A container attached to `web` with `docker network connect` is **lost when it is recreated**. Declare `web` (`external: true`) in the project's own compose file; `n8n` and `trillequipment` were fixed this way on 2026-10-18. A leftover `caddy` service in a project compose file would fight the real Caddy for 80/443; keep Caddy only in `/opt/x2g-infrastructure/caddy`.
 - Compose files must use spaces, not tabs; `cat -A docker-compose.yaml | head` shows tabs as `^I`.
 
 Related: [[Self-host Supabase on Hetzner]], [[Update the Hetzner test server]], [[Back up n8n and builder]]

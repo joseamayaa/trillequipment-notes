@@ -60,4 +60,6 @@ Stopping a container does **not** delete data (n8n's data is in the named volume
 - `scp : The term 'scp' is not recognized` (PowerShell) → use Git Bash/WSL or install the OpenSSH client (`Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0` as admin).
 - `Permission denied` on a file → it is root-owned; `chown` the backups folder.
 
-Related: [[Caddy reverse proxy on Hetzner]], [[Hetzner server layout]]
+Update 2026-10-18: n8n runs on SQLite (`DB_TYPE=sqlite`); the Postgres dump above was only 20 KB, so the real data is in the `n8n_n8n_data` volume (the `n8n-data` tarball). n8n now lives in `/opt/x2g-infrastructure/n8n` (compose project name pinned to `n8n`). Nightly backups are automated in [[Daily server backups]].
+
+Related: [[Caddy reverse proxy on Hetzner]], [[Hetzner server layout]], [[Daily server backups]]
