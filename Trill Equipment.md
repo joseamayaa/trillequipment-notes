@@ -28,6 +28,7 @@ Details: [[2026-10-11 Docker Hub test pipeline]]. New project on the server: [[A
 ## Runbooks
 - [[Add a project to the server]]
 - [[Project template scripts]]
+- [[Harden Studio and API access]]
 - [[Build and push a test image]]
 - [[Update the Hetzner test server]]
 - [[Hetzner server layout]]
@@ -73,7 +74,7 @@ Details: [[2026-10-11 Docker Hub test pipeline]]. New project on the server: [[A
 
 ### Next: platform (details in [[2026-10-23 Project template scripts and cleanup]])
 - [ ] **Backups: get a copy to the PC (SSH key); do the restore tests; confirm the first scheduled run happened (`tail /var/log/x2g-backup.log` after 03:15)**
-- [ ] Studio hardening: own hostname behind Cloudflare Access; API hostname limited to the API paths
+- [ ] Studio hardening: own hostname behind Cloudflare Access; API hostname limited to the API paths. **Plan written (about 30 to 40 minutes), not run** → [[Harden Studio and API access]]
 - [ ] Small cleanups: `.removed/demo-*`, the `.bak-*` files (the Supabase `.env.bak-2026-10-17` holds every secret; the values should be in a password manager first) and `backups/supabase/env.last`
 - [ ] Look inside `/opt/website-builder/projects` (mode 777, public listing) for anything that should not be public
 - [ ] Decide whether to move `/opt/website-builder` and `/var/www/website-builder` into `/opt/x2g-infrastructure/`; drop the unused `n8n-postgres` service if confirmed unused
