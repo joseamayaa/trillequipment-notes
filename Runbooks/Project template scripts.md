@@ -322,6 +322,6 @@ Run `bash -n` and check it prints OK for all five; a paste can damage a script (
 
 ## Not covered yet
 - No authentication on new sites: every new hostname is public (a Basic-auth option is planned).
-- `bin/`, `caddy/sites/` and the per-project folders are **not** in the nightly backup yet ([[Daily server backups]]); the notes here are the only copy of the scripts besides the server.
+- `bin/`, `caddy/sites/` and the per-project folders are in the nightly backup (`infra-extra.tgz`, since 2026-10-23, see [[Daily server backups]]). Until a copy is pulled off the server, the notes here are the only copy of the scripts outside the server.
 
 Related: [[Add a project to the server]], [[Caddy reverse proxy on Hetzner]], [[Self-host Supabase on Hetzner]], [[2026-10-18 Shared Supabase and pulled backups]]

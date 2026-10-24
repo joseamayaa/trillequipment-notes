@@ -24,8 +24,7 @@ Hub: [[Trill Equipment]] · Worked with Claude Code · Continues [[2026-10-18 n8
 - Notes only. The scripts live on the server (full source in [[Project template scripts]]).
 
 ## Next
-- [ ] **Add `bin/`, `caddy/sites/` and the project folders to the nightly backup** (`projects.tgz` covers only `migrations` and `trillequipment`; `caddy-config.tgz` only the Caddyfile and compose file)
-- [ ] Confirm the cron entry exists: `cat /etc/cron.d/x2g-backup` (the line was given; not confirmed) and that `chmod 600` line is in `backup.sh` (`grep chmod /opt/x2g-infrastructure/backups/backup.sh`)
+- [x] Backup gaps closed later the same day: the cron entry (`15 3 * * *`) and the `chmod 600 "$OUT"/*` line (line 45) are in place, and `backup.sh` now writes `infra-extra.tgz` (everything in `/opt/x2g-infrastructure` except `backups`, `supabase`, `.removed`, `caddy/logs`, `n8n/backups`). A manual run printed `done: 59M`, and the archive lists `bin/*.sh` and `caddy/sites/`. [ ] Check tomorrow that the first scheduled run happened: `tail /var/log/x2g-backup.log`
 - [ ] **Get a backup copy off the server** (PC): `scp` still asks for a password. Fix the key (generate or find the key on the PC, append its **public** line to `/root/.ssh/authorized_keys` from the existing server shell, then pull) or use the server login; then do the **restore tests** (Supabase dump into a throwaway container of the same image, n8n database `pragma integrity_check`)
 - [ ] Optional `--auth` (Basic auth) for `new-project.sh`, so test sites are not public by default
 - [ ] Studio hardening: own hostname behind Cloudflare Access; API hostname answering only `/rest`, `/auth`, `/storage`, `/realtime`, `/functions`

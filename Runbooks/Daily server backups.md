@@ -9,7 +9,7 @@ updated: 2026-10-18
 
 A script on the Hetzner server backs up Supabase, n8n and Caddy every night and keeps 7 days; I pull a copy to my PC. Hub: [[Trill Equipment]]
 
-**Status (2026-10-23):** written 2026-10-18 and run by hand on 2026-10-23 (8 files, 59 MB, about 12 seconds, no errors). The cron entry and the `chmod 600` fix were given but **not confirmed**; the copy to the PC and the restore tests are **not done** (`scp` to the PC kept asking for a password; the SSH key is not set up). The n8n step was rewritten to a consistent `sqlite3 .backup` copy before that run. To make the files private, add `chmod 600 "$OUT"/*` just before the final `log "done` line (the files created inside Docker containers are world-readable otherwise; `daily/` is mode 700). The backup files contain secrets (`.env` files, the database dump): never in git, this vault or chat. Decision: [[2026-10-18 Shared Supabase and pulled backups]]
+**Status (2026-10-23):** written 2026-10-18 and run by hand on 2026-10-23 (8 files, 59 MB, about 12 seconds, no errors). The cron entry (`/etc/cron.d/x2g-backup`, 03:15) and the `chmod 600` line were confirmed in place later that day, and the script gained `infra-extra.tgz` (9 files, still 59 MB; first scheduled run is the night of 2026-10-23, check `tail /var/log/x2g-backup.log`). The copy to the PC and the restore tests are **not done** (`scp` to the PC kept asking for a password; the SSH key is not set up). The n8n step was rewritten to a consistent `sqlite3 .backup` copy before that run. To make the files private, add `chmod 600 "$OUT"/*` just before the final `log "done` line (the files created inside Docker containers are world-readable otherwise; `daily/` is mode 700). The backup files contain secrets (`.env` files, the database dump): never in git, this vault or chat. Decision: [[2026-10-18 Shared Supabase and pulled backups]]
 
 ## What it saves
 Into `/opt/x2g-infrastructure/backups/daily/<date>/`:
@@ -18,6 +18,7 @@ Into `/opt/x2g-infrastructure/backups/daily/<date>/`:
 - `n8n-database.sqlite.gz` (consistent `sqlite3 .backup` copy of the n8n database: workflows and credentials), `n8n-files.tgz` (the rest of `n8n_n8n_data`: config with the encryption key, event logs, nodes, `binaryData`) and `n8n-config.tgz` (`.env`, compose)
 - `caddy-data.tgz` (volume `caddy_caddy_data`: account key and certificates) and `caddy-config.tgz` (`Caddyfile`, compose)
 - `projects.tgz`: `migrations/` and `trillequipment/`
+- `infra-extra.tgz`: everything in `/opt/x2g-infrastructure` except `backups/`, `supabase/`, `.removed/`, `caddy/logs` and `n8n/backups`. That covers `bin/` (the scripts), `caddy/` (Caddyfile, compose, `sites/`), `n8n/` config, `migrations/` and every project folder made by `new-project.sh`, so new projects are included automatically. Docker volumes of projects are not covered (only n8n and Caddy have their own volume backups).
 
 Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}` are not touched or pruned.
 
@@ -71,9 +72,13 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
    log "projects and migrations"
    tar czf "$OUT/projects.tgz" -C "$BASE" migrations trillequipment
 
+   log "bin, caddy sites, project folders"
+   tar czf "$OUT/infra-extra.tgz" -C "$BASE" --exclude=./backups --exclude=./supabase --exclude=./.removed --exclude=./caddy/logs --exclude=./n8n/backups .
+
    log "prune older than $KEEP_DAYS days"
    find "$BASE/backups/daily" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
 
+   chmod 600 "$OUT"/*
    log "done: $(du -sh "$OUT" | cut -f1) in $OUT"
    EOF
    ```
@@ -100,7 +105,7 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
    ```
 
 ## Check it worked
-- The run ends with a `done:` line and the folder holds the 8 files above (`supabase-db.sql.gz`, `supabase-files.tgz`, `n8n-database.sqlite.gz`, `n8n-files.tgz`, `n8n-config.tgz`, `caddy-data.tgz`, `caddy-config.tgz`, `projects.tgz`).
+- The run ends with a `done:` line and the folder holds the 9 files above (`supabase-db.sql.gz`, `supabase-files.tgz`, `n8n-database.sqlite.gz`, `n8n-files.tgz`, `n8n-config.tgz`, `caddy-data.tgz`, `caddy-config.tgz`, `projects.tgz`, `infra-extra.tgz`), all mode 600. `tar tzf .../infra-extra.tgz | grep -E 'bin/|sites/'` lists the scripts and `caddy/sites/`.
 - The next morning `tail /var/log/x2g-backup.log` shows a run for that date.
 - A backup is not proven until a restore works: load `supabase-db.sql.gz` into a **temporary** Postgres container (never the live one) and list the tables. *Restore test: still to do.*
 
@@ -112,7 +117,7 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
 - Disk filling up → lower `KEEP_DAYS`, or look at which tarball grew (`du -sh daily/*/*`).
 
 ## Gaps (as of 2026-10-23)
-- **Not backed up:** `/opt/x2g-infrastructure/bin/` (the scripts, source also in [[Project template scripts]]), `caddy/sites/` (the per-project routes), and the per-project folders made by `new-project.sh` (`projects.tgz` covers only `migrations` and `trillequipment`; `caddy-config.tgz` only the Caddyfile and compose file). Add them to the script.
+- Fixed 2026-10-23: `bin/`, `caddy/sites/` and the per-project folders are now in `infra-extra.tgz`. Still **not** backed up: the Docker volumes of projects (other than n8n and Caddy), the `.removed/` folder and the Caddy logs.
 - Schema dumps from `remove-schema.sh` and `env.last` sit in `backups/supabase/` and are not in `daily/`.
 - Nothing leaves the server yet: the backups only protect against mistakes, not against losing the machine, until a copy is pulled to the PC.
 

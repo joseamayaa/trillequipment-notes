@@ -68,10 +68,10 @@ Details: [[2026-10-11 Docker Hub test pipeline]]. New project on the server: [[A
 - [x] Decided: shared Supabase with a schema per project; backups pulled to the PC
 - [x] **Project template built and tested (2026-10-23):** `new-project.sh`, `remove-project.sh`, `new-schema.sh`, `apply-migrations.sh`, `remove-schema.sh` → [[Add a project to the server]]
 - [x] Old copies deleted (`~/migrations`, `/root/supabase`, `/opt/n8n`); disk back to 22 GB used
-- [x] Backup script written and run by hand (8 files, 59 MB) → [[Daily server backups]]
+- [x] Nightly backup script (03:15 cron) covers Supabase, n8n, Caddy, `bin/`, `caddy/sites/` and project folders; run by hand 2026-10-23: 9 files, 59 MB → [[Daily server backups]]
 
 ### Next: platform (details in [[2026-10-23 Project template scripts and cleanup]])
-- [ ] **Backups: add `bin/`, `caddy/sites/` and project folders to the script; confirm the cron entry and the `chmod 600` line; get a copy to the PC (SSH key); do the restore tests**
+- [ ] **Backups: get a copy to the PC (SSH key); do the restore tests; confirm the first scheduled run happened (`tail /var/log/x2g-backup.log` after 03:15)**
 - [ ] Optional Basic auth (`--auth`) for new sites; every new hostname is public today
 - [ ] Studio hardening: own hostname behind Cloudflare Access; API hostname limited to the API paths
 - [ ] Small cleanups: `.removed/demo-*`, the `.bak-*` files (the Supabase `.env.bak-2026-10-17` holds every secret; the values should be in a password manager first) and `backups/supabase/env.last`
