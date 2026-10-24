@@ -18,10 +18,14 @@ The scripts are in `/opt/x2g-infrastructure/bin/` (source and setup in [[Project
 
 ## Add the site (container + HTTPS route)
 ```
-sudo /opt/x2g-infrastructure/bin/new-project.sh <name> <image> [port] [hostname]
-sudo /opt/x2g-infrastructure/bin/new-project.sh myapp jjohamaya/myapp:test-1 80
+sudo /opt/x2g-infrastructure/bin/new-project.sh <name> <image> [port] [hostname] [--public] [--user NAME]
+sudo /opt/x2g-infrastructure/bin/new-project.sh myapp jjohamaya/myapp:test-1 80            # password-protected (default)
+sudo /opt/x2g-infrastructure/bin/new-project.sh myapp jjohamaya/myapp:test-1 80 --public   # no password
+sudo /opt/x2g-infrastructure/bin/new-project.sh myapp jjohamaya/myapp:test-1 80 --user alice
 ```
 It creates `/opt/x2g-infrastructure/<name>/docker-compose.yaml` (service `app` on the `web` network, alias `<name>`, **no published ports**), writes `/opt/x2g-infrastructure/caddy/sites/<name>.caddy`, checks that Caddy can see it, validates the config and reloads Caddy with no downtime. If anything fails it rolls back (container, route, folder). Default hostname `<name>.xidolabs.cc`; use the 4th argument for another one.
+
+**Password by default:** unless you pass `--public`, the site asks for a login (Caddy Basic auth, user `team` or the one from `--user`). The script generates a random password and prints it **once** at the end, so save it right away (in a password manager, not in these notes); only a hash is stored, in `caddy/sites/<name>.caddy`. To change the password later, remove and re-add the project, or replace the hash in the snippet (`docker exec caddy caddy hash-password`) and reload Caddy. This is one shared login per site, not per-user access, and it covers the whole hostname. Tested: right password 200, wrong password 401, no login 401, `--public` 200.
 
 The first request to a new hostname can return Cloudflare `525` for a few seconds while Caddy gets its certificate; wait about 20 seconds and retry. Tested with `nginx:alpine`: 525, then 200.
 
@@ -64,6 +68,7 @@ sudo /opt/x2g-infrastructure/bin/remove-schema.sh <project_name> # dumps first, 
 - `525` that does not go away → `docker compose logs caddy` (certificate errors); see [[Caddy reverse proxy on Hetzner]].
 - `502` → the container is not on `web`, uses another port, or is not up (`docker compose ps`); the route points at `<name>:<port>`.
 - `error: schema ... already exists` / `does not exist` → the script's guard; check `\dn`.
-- Every new hostname is **public**, and scanners find new names within hours (check `caddy/logs/access.log`). Basic auth or Cloudflare Access is not built yet; do not put anything private on a test hostname.
+- A `--public` hostname is open to everyone, and scanners find new names within hours (check `caddy/logs/access.log`). Do not put anything private on one. Lost the password of a protected site → remove and re-add it, or replace the hash in its snippet.
+- `--public` sites that use a Supabase schema expose their data to anyone with the (public) anon key anyway; RLS is the only protection.
 
 Related: [[Project template scripts]], [[Hetzner server layout]], [[Daily server backups]]

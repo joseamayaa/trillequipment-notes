@@ -28,25 +28,40 @@ In `docker-compose.yaml` add the mount `- ./sites:/etc/caddy/sites:ro` under Cad
 Check the mount is live: `docker exec caddy ls /etc/caddy/sites` lists `00-readme.caddy`. If `caddy validate` prints `No files matching import glob pattern`, the running container has no `sites` mount (it happened on the first test: validate "passed" but the route never existed, and the new hostname returned Cloudflare 525).
 
 ## new-project.sh
-`new-project.sh <name> <image> [port] [hostname]` makes `/opt/x2g-infrastructure/<name>/docker-compose.yaml` (service `app`, network `web`, alias `<name>`, no published ports), writes `caddy/sites/<name>.caddy`, validates, reloads Caddy. Rolls back on any failure. Default hostname `<name>.xidolabs.cc` (override the domain with `DOMAIN=`).
+`new-project.sh <name> <image> [port] [hostname] [--public] [--user NAME]` makes `/opt/x2g-infrastructure/<name>/docker-compose.yaml` (service `app`, network `web`, alias `<name>`, no published ports), writes `caddy/sites/<name>.caddy`, validates, reloads Caddy. Rolls back on any failure. Default hostname `<name>.xidolabs.cc` (override the domain with `DOMAIN=`).
+
+**Password by default (added 2026-10-23):** unless `--public` is given, the script generates a random 20-character password, stores only its hash (made with `docker exec caddy caddy hash-password`) in a Caddy `basic_auth` block in the snippet (user `team`, or `--user NAME`) and prints the password **once** at the end. The hash contains `$`, so the snippet is written with `printf '%s'`, never an unquoted heredoc. Tested: right password 200, wrong password 401, no login 401, `--public` 200.
 ```
 cat > /opt/x2g-infrastructure/bin/new-project.sh <<'EOF'
 #!/usr/bin/env bash
-# Usage: new-project.sh <name> <image> [port] [hostname]
+# Usage: new-project.sh <name> <image> [port] [hostname] [--public] [--user NAME]
 # Creates /opt/x2g-infrastructure/<name>/ (compose on the shared `web` network, no published ports),
 # adds a Caddy route in caddy/sites/<name>.caddy, validates, and reloads Caddy with no downtime.
 # Default hostname: <name>.xidolabs.cc (override the domain with DOMAIN=...). Rolls back on any failure.
+# The site is password-protected (Caddy basic_auth, random password printed once) unless --public.
 set -euo pipefail
 
 BASE=/opt/x2g-infrastructure
 DOMAIN=${DOMAIN:-xidolabs.cc}
+AUTH=1; AUTH_USER=team; POS=()
+while [ $# -gt 0 ]; do
+  case $1 in
+    --public) AUTH=0 ;;
+    --user)   AUTH_USER=${2:?--user needs a name}; shift ;;
+    *)        POS+=("$1") ;;
+  esac
+  shift
+done
+set -- ${POS[@]+"${POS[@]}"}
+
 NAME=${1:-}; IMAGE=${2:-}; PORT=${3:-80}; HOST=${4:-"$NAME.$DOMAIN"}
 
 die() { echo "error: $*" >&2; exit 1; }
 
-[ -n "$NAME" ] && [ -n "$IMAGE" ] || die "usage: $0 <name> <image> [port] [hostname]"
+[ -n "$NAME" ] && [ -n "$IMAGE" ] || die "usage: $0 <name> <image> [port] [hostname] [--public] [--user NAME]"
 [[ $NAME =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || die "name: lowercase letters, digits and dashes only"
 [[ $PORT =~ ^[0-9]+$ ]] || die "port must be a number"
+[[ $AUTH_USER =~ ^[A-Za-z0-9_-]+$ ]] || die "user: letters, digits, dash and underscore only"
 case $NAME in
   caddy|n8n|supabase|builder|site|web|bin|backups|migrations|trill|trill-api|trillequipment) die "'$NAME' is reserved" ;;
 esac
@@ -58,6 +73,14 @@ docker network inspect web >/dev/null 2>&1 || die "docker network 'web' not foun
 docker network inspect web --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' | grep -qx "$NAME" \
   && die "a container named '$NAME' is already on the web network"
 grep -rqsF -- "$HOST {" "$BASE/caddy/Caddyfile" "$BASE/caddy/sites" && die "$HOST already has a Caddy route"
+
+PASS=""; HASH=""
+if [ "$AUTH" = 1 ]; then
+  PASS=$(openssl rand -base64 24 | tr -d '/+=\n' | cut -c1-20)
+  [ ${#PASS} -ge 16 ] || die "could not generate a password"
+  HASH=$(docker exec caddy caddy hash-password --plaintext "$PASS")
+  [ -n "$HASH" ] || die "could not hash the password"
+fi
 
 created=0; ok=0
 cleanup() {
@@ -91,12 +114,11 @@ COMPOSE
 
 (cd "$DIR" && docker compose config -q && docker compose up -d)
 
-cat > "$SNIP" <<CADDY
-$HOST {
-    import access_log
-    reverse_proxy $NAME:$PORT
-}
-CADDY
+printf '%s {\n    import access_log\n' "$HOST" > "$SNIP"
+if [ "$AUTH" = 1 ]; then
+  printf '    basic_auth {\n        %s %s\n    }\n' "$AUTH_USER" "$HASH" >> "$SNIP"
+fi
+printf '    reverse_proxy %s:%s\n}\n' "$NAME" "$PORT" >> "$SNIP"
 
 docker exec caddy test -f "/etc/caddy/sites/$NAME.caddy" || die "Caddy cannot see /etc/caddy/sites (is the ./sites mount in its compose file, and was Caddy recreated?)"
 if ! out=$(docker exec caddy caddy validate --config /etc/caddy/Caddyfile 2>&1); then
@@ -106,7 +128,13 @@ docker exec caddy caddy reload --config /etc/caddy/Caddyfile
 ok=1
 
 echo "ok: https://$HOST -> $NAME:$PORT   (folder: $DIR)"
-echo "first request: $(curl -s -o /dev/null -w '%{http_code}' -m 30 "https://$HOST" || true)  (the first one can be slow while Caddy gets a certificate)"
+if [ "$AUTH" = 1 ]; then
+  echo "login:    user '$AUTH_USER'   password '$PASS'   <- shown once, save it now (only a hash is stored)"
+  echo "first request: $(curl -s -o /dev/null -w '%{http_code}' -m 30 -u "$AUTH_USER:$PASS" "https://$HOST" || true)  (200 = ok; 525 for a few seconds while Caddy gets a certificate)"
+else
+  echo "PUBLIC: no password on this site"
+  echo "first request: $(curl -s -o /dev/null -w '%{http_code}' -m 30 "https://$HOST" || true)  (200 = ok; 525 for a few seconds while Caddy gets a certificate)"
+fi
 EOF
 ```
 
@@ -321,7 +349,7 @@ for f in new-project remove-project new-schema apply-migrations remove-schema; d
 Run `bash -n` and check it prints OK for all five; a paste can damage a script (see the apply-migrations note).
 
 ## Not covered yet
-- No authentication on new sites: every new hostname is public (a Basic-auth option is planned).
+- The password is one shared Basic-auth login per site, not per-user access control, and it covers the whole hostname (including any webhook paths). The four original hosts are unchanged (`n8n.` has its own login; `builder.` and `trill.` are public).
 - `bin/`, `caddy/sites/` and the per-project folders are in the nightly backup (`infra-extra.tgz`, since 2026-10-23, see [[Daily server backups]]). Until a copy is pulled off the server, the notes here are the only copy of the scripts outside the server.
 
 Related: [[Add a project to the server]], [[Caddy reverse proxy on Hetzner]], [[Self-host Supabase on Hetzner]], [[2026-10-18 Shared Supabase and pulled backups]]
