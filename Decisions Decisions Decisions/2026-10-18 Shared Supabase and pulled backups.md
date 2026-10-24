@@ -18,6 +18,8 @@ The server is a general test host for several projects ([[2026-10-15 Caddy repla
 - **Backups:** daily script on the server, 7 days kept; the copy off the server is **pulled to the PC on demand** with `scp` (no new account or cost) → [[Daily server backups]].
 - Scope for now: only what the platform needs (backups, Caddy snippet + `new-project.sh`, hardening). Trill-specific work stays parked.
 
+Implemented 2026-10-23: `new-schema.sh`, `apply-migrations.sh`, `remove-schema.sh` ([[Add a project to the server]]).
+
 ## Why
 - A full Supabase stack is about 11 containers; one per project would not fit many projects on a small server.
 - Pulling to the PC costs nothing and needs no keys on the server. Trade-off: it protects only when a backup is actually pulled.

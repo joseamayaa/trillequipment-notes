@@ -90,7 +90,7 @@ Done 2026-10-18, once Caddy served `https://trill-api.xidolabs.cc`.
 ## Notes
 - Self-hosted Studio has one project (the default). There is no GitHub integration; schema gets in via SQL migrations ([[Apply the schema to self-hosted Supabase]]).
 - Plain HTTP on 8000 was for the first test only; Studio and the API are now served over HTTPS by Caddy and the port is bound to localhost (section above).
-- Future projects share this stack with a schema each ([[2026-10-18 Shared Supabase and pulled backups]]); they share the anon and service-role keys.
+- Future projects share this stack with a schema each ([[2026-10-18 Shared Supabase and pulled backups]]); they share the anon and service-role keys. `new-schema.sh`, `apply-migrations.sh` and `remove-schema.sh` automate it (tested 2026-10-23) → [[Add a project to the server]]. The API exposes the schemas listed in `PGRST_DB_SCHEMAS` in the stack's `.env` (default `public,graphql_public`); only `supabase-studio` and `supabase-rest` read it, so only those two are recreated when it changes.
 - Keep `.env` out of git and back up its values (a lost `JWT_SECRET` means regenerating all keys and updating the app).
 
 Related: [[Update the Hetzner test server]], [[2026-10-14 Self-hosting Supabase on Hetzner]]

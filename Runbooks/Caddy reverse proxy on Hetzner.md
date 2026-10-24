@@ -12,13 +12,15 @@ Caddy (in Docker) owns ports 80/443 on the Hetzner server, gets HTTPS certificat
 Layout and containers: [[Hetzner server layout]]. Why Caddy: [[2026-10-15 Caddy replaces nginx]]
 
 ## How it is set up
-- Folder: `/opt/x2g-infrastructure/caddy/` with `Caddyfile`, `docker-compose.yaml` and `logs/`.
+- Folder: `/opt/x2g-infrastructure/caddy/` with `Caddyfile`, `docker-compose.yaml`, `logs/` and `sites/`. The Caddyfile ends with `import /etc/caddy/sites/*.caddy`; each project made by `new-project.sh` adds one file there ([[Add a project to the server]], [[Project template scripts]]). The four original blocks (`n8n.`, `builder.`, `trill.`, `trill-api.`) stay in the Caddyfile.
 - Caddy joins two Docker networks: `web` (shared, external) and `supabase_default` (Supabase stack, external).
 - Routes (hostname → container): `n8n.xidolabs.cc` → `n8n:5678` (`flush_interval -1` for n8n's live push), `trill.xidolabs.cc` → `site:80`, `trill-api.xidolabs.cc` → `supabase-envoy:8000`, `builder.xidolabs.cc` → static files (`/srv/builder`, and `/srv/projects` with a directory listing under `/projects/`).
 - Logs: `logs/caddy.log` (events, certificates), `logs/access.log` (one line per request). Startup errors such as `address already in use` only show in `docker compose logs caddy`.
 - Cloudflare: wildcard `*.xidolabs.cc` A record, **proxied**, plus explicit `n8n` and `builder` records. SSL/TLS mode must be **Full (strict)**. Caddy gets its certificates through the proxy with the HTTP challenge on port 80.
 
 ## Add a new project (the five steps)
+Now automated: `new-project.sh <name> <image> [port]` does all of this and rolls back on failure → [[Add a project to the server]]. The manual steps stay here for understanding and for blocks that do not fit the script.
+
 1. Make a folder `/opt/x2g-infrastructure/<project>/` with its `docker-compose.yaml`. **No published ports.** Put the container on the `web` network:
    ```yaml
    networks:
@@ -65,6 +67,8 @@ Rollback: `docker compose stop caddy && sudo systemctl start nginx` (nginx's con
 - A hostname shows the wrong (old) site in the browser while `curl` shows the right answer → stale browser cache. Check `curl -sI https://<host>/` (e.g. `trill-api` should return `401` with `www-authenticate: Basic`, which is Studio's login), then clear the cache or use a private window.
 - New hostnames get scanned within hours; check `logs/access.log` for odd user agents. Studio sits behind Envoy's Basic auth, so keep `DASHBOARD_PASSWORD` long and random.
 - `Caddyfile` must be a **file**; if it is missing when Compose starts, Docker creates an empty directory of that name.
+- `caddy validate` prints `No files matching import glob pattern /etc/caddy/sites/*.caddy` → the running container has no `./sites` mount (the compose change was never applied by recreating Caddy). Validation still "passes" and new routes silently do not exist; the new hostname returns Cloudflare `525`. Fix: `docker compose up -d` in the Caddy folder, then `docker exec caddy ls /etc/caddy/sites`.
+- A brand-new hostname returns `525` for a few seconds until Caddy has its certificate; retry after about 20 seconds.
 - A container attached to `web` with `docker network connect` is **lost when it is recreated**. Declare `web` (`external: true`) in the project's own compose file; `n8n` and `trillequipment` were fixed this way on 2026-10-18. A leftover `caddy` service in a project compose file would fight the real Caddy for 80/443; keep Caddy only in `/opt/x2g-infrastructure/caddy`.
 - Compose files must use spaces, not tabs; `cat -A docker-compose.yaml | head` shows tabs as `^I`.
 

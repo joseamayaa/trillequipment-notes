@@ -9,13 +9,13 @@ updated: 2026-10-18
 
 A script on the Hetzner server backs up Supabase, n8n and Caddy every night and keeps 7 days; I pull a copy to my PC. Hub: [[Trill Equipment]]
 
-**Status: written 2026-10-18, not run yet.** Run it by hand first (steps below). The backup files contain secrets (`.env` files, the database dump): never in git, this vault or chat. Decision: [[2026-10-18 Shared Supabase and pulled backups]]
+**Status (2026-10-23):** written 2026-10-18 and run by hand on 2026-10-23 (8 files, 59 MB, about 12 seconds, no errors). The cron entry and the `chmod 600` fix were given but **not confirmed**; the copy to the PC and the restore tests are **not done** (`scp` to the PC kept asking for a password; the SSH key is not set up). The n8n step was rewritten to a consistent `sqlite3 .backup` copy before that run. To make the files private, add `chmod 600 "$OUT"/*` just before the final `log "done` line (the files created inside Docker containers are world-readable otherwise; `daily/` is mode 700). The backup files contain secrets (`.env` files, the database dump): never in git, this vault or chat. Decision: [[2026-10-18 Shared Supabase and pulled backups]]
 
 ## What it saves
 Into `/opt/x2g-infrastructure/backups/daily/<date>/`:
 - `supabase-db.sql.gz`: `pg_dumpall` of `supabase-db` (the safe copy; do not copy the live `volumes/db`)
 - `supabase-files.tgz`: the stack's `.env`, `docker-compose.yml`, and `volumes/storage` + `volumes/functions` if present
-- `n8n-data.tgz` (volume `n8n_n8n_data`: workflows and credentials, SQLite) and `n8n-config.tgz` (`.env`, compose)
+- `n8n-database.sqlite.gz` (consistent `sqlite3 .backup` copy of the n8n database: workflows and credentials), `n8n-files.tgz` (the rest of `n8n_n8n_data`: config with the encryption key, event logs, nodes, `binaryData`) and `n8n-config.tgz` (`.env`, compose)
 - `caddy-data.tgz` (volume `caddy_caddy_data`: account key and certificates) and `caddy-config.tgz` (`Caddyfile`, compose)
 - `projects.tgz`: `migrations/` and `trillequipment/`
 
@@ -52,9 +52,15 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
      .env docker-compose.yml \
      $(for d in volumes/storage volumes/functions; do [ -e "$BASE/supabase/docker/$d" ] && echo "$d"; done)
 
-   log "n8n volume and config"
-   docker run --rm -v n8n_n8n_data:/data:ro -v "$OUT":/out alpine \
-     tar czf /out/n8n-data.tgz -C /data .
+   log "n8n database (consistent SQLite copy while n8n runs)"
+   docker run --rm -v n8n_n8n_data:/data -v "$OUT":/out alpine sh -c '
+     apk add --no-cache sqlite >/dev/null &&
+     sqlite3 /data/database.sqlite ".backup /out/n8n-database.sqlite" &&
+     gzip -f /out/n8n-database.sqlite'
+
+   log "n8n other data and config"
+   docker run --rm -v n8n_n8n_data:/data:ro -v "$OUT":/out alpine sh -c '
+     cd /data && tar czf /out/n8n-files.tgz $(ls -A | grep -v "^database\.sqlite")'
    tar czf "$OUT/n8n-config.tgz" -C "$BASE/n8n" .env docker-compose.yml
 
    log "caddy volume and config"
@@ -94,14 +100,20 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
    ```
 
 ## Check it worked
-- The run ends with a `done:` line and the folder holds the 7 files above.
+- The run ends with a `done:` line and the folder holds the 8 files above (`supabase-db.sql.gz`, `supabase-files.tgz`, `n8n-database.sqlite.gz`, `n8n-files.tgz`, `n8n-config.tgz`, `caddy-data.tgz`, `caddy-config.tgz`, `projects.tgz`).
 - The next morning `tail /var/log/x2g-backup.log` shows a run for that date.
 - A backup is not proven until a restore works: load `supabase-db.sql.gz` into a **temporary** Postgres container (never the live one) and list the tables. *Restore test: still to do.*
 
 ## Troubleshooting
 - `tar: ...: No such file or directory` in the run → a file name differs from the list above; fix the name in the script.
 - Run stops early with no `done:` → `set -e` stops at the first error; the line before it says which step failed.
-- The n8n volume holds a live SQLite database (about 496 MB, in WAL mode: recent writes sit in `database.sqlite-wal`) that is tarred while n8n runs, so the main file and the WAL are copied at slightly different moments. Usually restores fine, but is not guaranteed; the restore test is the real proof. A safer option is a consistent copy with `sqlite3 ... ".backup"` inside the container (or stopping n8n briefly) before the tar.
+- The n8n database is about 496 MB in WAL mode (recent writes sit in `database.sqlite-wal`), so it is copied with `sqlite3 .backup`, not `tar`, which gives a consistent file while n8n runs. That step installs `sqlite` inside a throwaway `alpine` container (needs outbound internet) and mounts the volume read-write, because SQLite may touch the `-shm` file. If `apk add` fails, `set -e` stops the script before the later steps; run it again, or check the server's DNS/outbound access. Not tested before 2026-10-23; the first run and the restore test are the proof.
+- n8n restore: stop n8n, put `n8n-database.sqlite.gz` (gunzipped) back as `database.sqlite` in the volume and unpack `n8n-files.tgz` beside it (the `config` file holds the encryption key; without it saved credentials are unreadable), then start n8n.
 - Disk filling up → lower `KEEP_DAYS`, or look at which tarball grew (`du -sh daily/*/*`).
 
-Related: [[Back up n8n and builder]], [[Hetzner server layout]], [[Self-host Supabase on Hetzner]]
+## Gaps (as of 2026-10-23)
+- **Not backed up:** `/opt/x2g-infrastructure/bin/` (the scripts, source also in [[Project template scripts]]), `caddy/sites/` (the per-project routes), and the per-project folders made by `new-project.sh` (`projects.tgz` covers only `migrations` and `trillequipment`; `caddy-config.tgz` only the Caddyfile and compose file). Add them to the script.
+- Schema dumps from `remove-schema.sh` and `env.last` sit in `backups/supabase/` and are not in `daily/`.
+- Nothing leaves the server yet: the backups only protect against mistakes, not against losing the machine, until a copy is pulled to the PC.
+
+Related: [[Back up n8n and builder]], [[Hetzner server layout]], [[Self-host Supabase on Hetzner]], [[Add a project to the server]]
