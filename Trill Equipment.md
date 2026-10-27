@@ -73,8 +73,9 @@ Details: [[2026-10-11 Docker Hub test pipeline]]. New project on the server: [[A
 - [x] Nightly backup script (03:15 cron) covers Supabase, n8n, Caddy, `bin/`, `caddy/sites/` and project folders; run by hand 2026-10-23: 9 files, 59 MB → [[Daily server backups]]
 
 ### Next: platform (details in [[2026-10-23 Project template scripts and cleanup]])
-- [ ] **Backups: get a copy to the PC (SSH key); do the restore tests; confirm the first scheduled run happened (`tail /var/log/x2g-backup.log` after 03:15)**
-- [ ] Studio hardening: own hostname behind Cloudflare Access; API hostname limited to the API paths. **Plan written (about 30 to 40 minutes), not run** → [[Harden Studio and API access]]
+- [x] **Backups verified (2026-10-26):** scheduled runs happened on 10-24, 10-25 and 10-26; a full copy is pulled to the PC (`~/x2g-backups`, WSL); both restore tests passed → [[Daily server backups]]
+- [x] Studio hardening, Part 1 (2026-10-26): Studio on `studio.xidolabs.cc`; `trill-api.` answers only the API paths → [[Harden Studio and API access]]
+- [ ] Studio hardening, Part 2: Cloudflare Access on `studio.xidolabs.cc`. **Blocked: needs someone with the Cloudflare account that holds `xidolabs.cc`** (about 15 to 25 minutes)
 - [ ] Small cleanups: `.removed/demo-*`, the `.bak-*` files (the Supabase `.env.bak-2026-10-17` holds every secret; the values should be in a password manager first) and `backups/supabase/env.last`
 - [ ] Look inside `/opt/website-builder/projects` (mode 777, public listing) for anything that should not be public
 - [ ] Decide whether to move `/opt/website-builder` and `/var/www/website-builder` into `/opt/x2g-infrastructure/`; drop the unused `n8n-postgres` service if confirmed unused

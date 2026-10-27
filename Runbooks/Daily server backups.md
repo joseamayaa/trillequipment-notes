@@ -107,7 +107,7 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
 ## Check it worked
 - The run ends with a `done:` line and the folder holds the 9 files above (`supabase-db.sql.gz`, `supabase-files.tgz`, `n8n-database.sqlite.gz`, `n8n-files.tgz`, `n8n-config.tgz`, `caddy-data.tgz`, `caddy-config.tgz`, `projects.tgz`, `infra-extra.tgz`), all mode 600. `tar tzf .../infra-extra.tgz | grep -E 'bin/|sites/'` lists the scripts and `caddy/sites/`.
 - The next morning `tail /var/log/x2g-backup.log` shows a run for that date.
-- A backup is not proven until a restore works: load `supabase-db.sql.gz` into a **temporary** Postgres container (never the live one) and list the tables. *Restore test: still to do.*
+- A backup is not proven until a restore works: load `supabase-db.sql.gz` into a **temporary** Postgres container (never the live one) and list the tables. *Restore tests: done 2026-10-26, see below.*
 
 ## Troubleshooting
 - `tar: ...: No such file or directory` in the run → a file name differs from the list above; fix the name in the script.
@@ -116,9 +116,15 @@ Older manual backups in `/opt/x2g-infrastructure/backups/{builder,n8n,supabase}`
 - n8n restore: stop n8n, put `n8n-database.sqlite.gz` (gunzipped) back as `database.sqlite` in the volume and unpack `n8n-files.tgz` beside it (the `config` file holds the encryption key; without it saved credentials are unreadable), then start n8n.
 - Disk filling up → lower `KEEP_DAYS`, or look at which tarball grew (`du -sh daily/*/*`).
 
-## Gaps (as of 2026-10-23)
+## Restore tests (passed 2026-10-26)
+Run on the server against `daily/2026-10-26`; the copy on the PC pulled fine over `scp` (key already installed; 9 files, mode 600).
+- **Supabase:** start a throwaway container of the live image (`docker inspect supabase-db --format '{{.Config.Image}}'`), wait 20 seconds, then `zcat supabase-db.sql.gz | docker exec -i restore-test psql -U supabase_admin -d postgres`. Restore as **`supabase_admin`**, not `postgres`: the `auth`, `storage` and `realtime` schemas belong to `supabase_admin`, and as `postgres` about 1000 permission errors come up. With the right role only about 70 "already exists" errors remain. Compare counts with the live database (`auth.users`, `storage.buckets`, tables in `x2g_meta`): they matched (0 / 2 / 1). Then `docker rm -f restore-test`.
+- **n8n:** `zcat n8n-database.sqlite.gz` into a file inside a throwaway `alpine` with `sqlite`, then `pragma integrity_check` printed `ok`; the copy holds 10 workflows and 4 credentials.
+- The Supabase dump has no project data yet (53 KB), so the test proves the roles and structure, not large tables. Repeat it once a real project holds data.
+
+## Gaps (as of 2026-10-26)
 - Fixed 2026-10-23: `bin/`, `caddy/sites/` and the per-project folders are now in `infra-extra.tgz`. Still **not** backed up: the Docker volumes of projects (other than n8n and Caddy), the `.removed/` folder and the Caddy logs.
 - Schema dumps from `remove-schema.sh` and `env.last` sit in `backups/supabase/` and are not in `daily/`.
-- Nothing leaves the server yet: the backups only protect against mistakes, not against losing the machine, until a copy is pulled to the PC.
+- The off-server copy is pulled by hand (step 5), so it is only as fresh as the last pull. Pull again after big changes.
 
 Related: [[Back up n8n and builder]], [[Hetzner server layout]], [[Self-host Supabase on Hetzner]], [[Add a project to the server]]

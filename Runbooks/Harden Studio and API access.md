@@ -9,7 +9,7 @@ updated: 2026-10-23
 
 Give Supabase Studio its own hostname and make the API hostname answer only API paths. Hub: [[Trill Equipment]]
 
-**Status: planned 2026-10-23, NOT run yet.** Nothing here has been tested. Estimated time: about 30 to 40 minutes (Part 1 about 10 minutes; Part 2 about 15 to 25 minutes, mostly in the Cloudflare dashboard).
+**Status (2026-10-26):** **Part 1 done and tested.** `trill-api` root returns 404 and `/auth/v1/health` with the anon key returns 200; `studio.xidolabs.cc` returns 401 and Studio works in the browser after the login; `n8n`, `trill` and `builder` return 200. The routes live in `caddy/sites/trill-api.caddy` and `caddy/sites/studio.caddy`; the old `trill-api` block is gone from the Caddyfile. Rollback copy: `Caddyfile.bak-studio`. **Part 2 (Cloudflare Access) is not done**: it needs access to the Cloudflare account that holds `xidolabs.cc`, which I do not have. Someone with that account has to do it (or give me access to it). Until then Studio is protected only by Envoy's Basic-auth login, so keep `DASHBOARD_PASSWORD` long and random.
 
 ## Why
 Today `trill-api.xidolabs.cc` serves everything through Envoy: the API and Studio (behind Envoy's Basic-auth login, `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`). New hostnames get scanned within hours, so Studio should not sit on the public API hostname, and a second gate in front of it is cheap. Related: [[Hetzner server layout]], [[Self-host Supabase on Hetzner]], [[Caddy reverse proxy on Hetzner]].
